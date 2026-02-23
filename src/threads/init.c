@@ -133,7 +133,31 @@ pintos_init (void)
     /* Run actions specified on kernel command line. */
     run_actions (argv);
   } else {
-    // TODO: no command line passed to kernel. Run interactively 
+    // TODO: no command line passed to kernel. Run interactively
+    char cmd[256];
+    int counter = 0; 
+    uint8_t curr_key;
+    printf("ENEE447> ");
+    while (1) {
+      curr_key = input_getc();
+      if (curr_key == '\n'||curr_key == '\r') {
+        cmd[counter] = '\0';
+        if (strcmp(cmd, "whoami") == 0){
+          printf("\nNguyen Le: 118023267, Brian W: 118639192");
+        } else if (strcmp(cmd, "exit") == 0){
+          break;
+        } else {
+          printf("\nInvalid command");
+        }
+        printf("\nENEE447> ");
+        memset(cmd, 0, sizeof(cmd));
+        counter = 0;
+      } else {
+        cmd[counter] = curr_key;
+        putchar(curr_key);
+        counter++;
+      }
+    }
   }
 
   /* Finish up. */
