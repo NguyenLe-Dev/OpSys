@@ -96,27 +96,25 @@ bool priority_more (const struct list_elem *a,
 void test_priority( void )
 {
   enum intr_level old = intr_disable();
+  
   if ( list_empty( &ready_list ) )
   {
+    intr_set_level( old );
     return;
   }
-
+  
   struct thread *cur = thread_current();
   struct thread *highest_ready = list_entry( list_begin(&ready_list), struct thread, elem );
-  
+  intr_set_level( old );
   if ( cur->priority < highest_ready->priority )
   {
-    if ( intr_context() )
-    {
+    
+    if ( intr_context() ){
       intr_yield_on_return();
-    }
-    else
-    {
+    }else{
       thread_yield();
     }
   }
-
-  intr_set_level( old );
 }
 
 void
@@ -235,7 +233,13 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
+  if (t->priority > thread_current()->priority){
+    if (intr_context()){
+      intr_yield_on_return();
+    }else{
+      thread_yield();
+    }
+  }
   return tid;
 }
 
@@ -275,13 +279,6 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem, priority_more, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
-  if (t->priority > thread_current()->priority){
-    if (intr_context()){
-      intr_yield_on_return();
-    }else{
-      thread_yield();
-    }
-  }
 
 }
 
