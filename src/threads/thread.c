@@ -73,6 +73,7 @@ static tid_t allocate_tid (void);
 
 void test_priority( void )
 {
+  enum intr_level old = intr_disable();
   if ( list_empty( &ready_list ) )
   {
     return;
@@ -92,6 +93,8 @@ void test_priority( void )
       thread_yield();
     }
   }
+
+  intr_set_level( old );
 }
 
 /** Initializes the threading system by transforming the code
