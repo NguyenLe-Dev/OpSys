@@ -95,7 +95,7 @@ struct thread
 
     //Alarm
     int64_t thread_wakeup_tick;
-97	 struct semaphore *sleep_sema;  	
+	 struct semaphore *sleep_sema;  	
     struct list_elem sleep_elem;
 
 #ifdef USERPROG
