@@ -109,7 +109,7 @@ extern bool thread_mlfqs;
 
 void thread_init (void);
 void thread_start (void);
-
+static bool priority_more (const struct list_elem *a,const struct list_elem *b,void *aux UNUSED)
 void thread_tick (void);
 void thread_print_stats (void);
 
