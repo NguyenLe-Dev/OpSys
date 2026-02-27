@@ -59,6 +59,17 @@ cond_priority_more (const struct list_elem *a,
 }
 
 
+/* Comparator for donation list (uses donation_elem). */
+static bool
+donation_priority_more (const struct list_elem *a,
+                        const struct list_elem *b,
+                        void *aux UNUSED)
+{
+  const struct thread *ta = list_entry (a, struct thread, donation_elem);
+  const struct thread *tb = list_entry (b, struct thread, donation_elem);
+  return ta->priority > tb->priority;
+}
+
 /** Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -228,7 +239,35 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  enum intr_level old = intr_disable ();
+
+  if (lock->holder != NULL)
+    {
+      thread_current ()->waiting_on = lock;
+
+      /* Donate priority up the chain (handles nested donation, max 8 levels). */
+      struct thread *donor = thread_current ();
+      struct lock *l = lock;
+      int depth = 0;
+      while (l != NULL && l->holder != NULL && depth < 8)
+        {
+          if (l->holder->priority >= donor->priority)
+            break;
+          l->holder->priority = donor->priority;
+          l = l->holder->waiting_on;
+          depth++;
+        }
+
+      /* Add to holder's donation list. */
+      list_insert_ordered (&lock->holder->donations,
+                           &thread_current ()->donation_elem,
+                           donation_priority_more, NULL);
+    }
+
+  intr_set_level (old);
   sema_down (&lock->semaphore);
+
+  thread_current ()->waiting_on = NULL;
   lock->holder = thread_current ();
 }
 
@@ -263,7 +302,33 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  enum intr_level old = intr_disable ();
+
+  /* Remove all donors waiting on this lock. */
+  struct thread *cur = thread_current ();
+  struct list_elem *e = list_begin (&cur->donations);
+  while (e != list_end (&cur->donations))
+    {
+      struct thread *donor = list_entry (e, struct thread, donation_elem);
+      struct list_elem *next = list_next (e);
+      if (donor->waiting_on == lock)
+        list_remove (e);
+      e = next;
+    }
+
+  /* Recalculate effective priority from remaining donors. */
+  if (list_empty (&cur->donations))
+    cur->priority = cur->base_priority;
+  else
+    {
+      list_sort (&cur->donations, donation_priority_more, NULL);
+      int top = list_entry (list_begin (&cur->donations),
+                            struct thread, donation_elem)->priority;
+      cur->priority = top > cur->base_priority ? top : cur->base_priority;
+    }
+
   lock->holder = NULL;
+  intr_set_level (old);
   sema_up (&lock->semaphore);
 }
 

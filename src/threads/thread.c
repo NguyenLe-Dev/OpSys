@@ -95,23 +95,23 @@ bool priority_more (const struct list_elem *a,
 
 void test_priority( void )
 {
-  enum intr_level old = intr_disable();
   
   if ( list_empty( &ready_list ) )
   {
-    intr_set_level( old );
     return;
   }
-  
+  enum intr_level old = intr_disable();
   struct thread *cur = thread_current();
   struct thread *highest_ready = list_entry( list_begin(&ready_list), struct thread, elem );
   intr_set_level( old );
   if ( cur->priority < highest_ready->priority )
   {
-    
-    if ( intr_context() ){
+    if ( intr_context() )
+    {
       intr_yield_on_return();
-    }else{
+    }
+    else
+    {
       thread_yield();
     }
   }
@@ -233,13 +233,11 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  if (t->priority > thread_current()->priority){
-    if (intr_context()){
-      intr_yield_on_return();
-    }else{
-      thread_yield();
-    }
-  }
+
+  /* Yield if new thread has higher priority. */
+  if (idle_thread != NULL && t->priority > thread_current ()->priority)
+    thread_yield ();
+
   return tid;
 }
 
@@ -279,7 +277,6 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem, priority_more, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
-
 }
 
 /** Returns the name of the running thread. */
@@ -375,8 +372,14 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  test_priority(); 
+  enum intr_level old = intr_disable ();
+  struct thread *cur = thread_current ();
+  cur->base_priority = new_priority;
+  /* Only lower effective priority if no active donors exceed new value */
+  if (list_empty (&cur->donations) || new_priority > cur->priority)
+    cur->priority = new_priority;
+  intr_set_level (old);
+  test_priority ();
 }
 
 /** Returns the current thread's priority. */
@@ -503,6 +506,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->base_priority = priority;
+  t->waiting_on = NULL;
+  list_init (&t->donations);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
