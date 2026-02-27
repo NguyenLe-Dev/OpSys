@@ -71,6 +71,29 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+void test_priority( void )
+{
+  if ( list_empty( &ready_list ) )
+  {
+    return;
+  }
+
+  struct thread *cur = thread_current();
+  struct thread *highest_ready = list_entry( list_begin(&ready_list), struct thread, elem );
+  
+  if ( cur->priority < highest_ready->priority )
+  {
+    if ( intr_context() )
+    {
+      intr_yield_on_return();
+    }
+    else
+    {
+      thread_yield();
+    }
+  }
+}
+
 /** Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
