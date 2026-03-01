@@ -220,6 +220,18 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   wake_sleeping_threads(ticks);
+
+  // Advanced Scheduling
+  if (thread_mlfqs){ 
+    if (ticks % TIMER_FREQ == 0)
+    {
+      mlfqs_calculate_load_avg ();
+      thread_foreach(mlfqs_calculate_recent_cpu, NULL);
+      thread_foreach(mlfqs_calculate_priority, NULL);
+    }
+    else if (ticks % 4 == 0)
+      thread_foreach(mlfqs_calculate_priority, NULL);
+  }
 }
 
 /** Returns true if LOOPS iterations waits for more than one timer

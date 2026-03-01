@@ -241,9 +241,12 @@ lock_acquire (struct lock *lock)
 
   enum intr_level old = intr_disable ();
 
-  if (lock->holder != NULL)
+  if (!thread_mlfqs && lock->holder != NULL)
     {
       thread_current ()->waiting_on = lock;
+      
+      //Advanced Scheduling
+      thread_current () -> waiting_on = lock;
 
       /* Donate priority up the chain (handles nested donation, max 8 levels). */
       struct thread *donor = thread_current ();
@@ -304,28 +307,31 @@ lock_release (struct lock *lock)
 
   enum intr_level old = intr_disable ();
 
-  /* Remove all donors waiting on this lock. */
-  struct thread *cur = thread_current ();
-  struct list_elem *e = list_begin (&cur->donations);
-  while (e != list_end (&cur->donations))
-    {
-      struct thread *donor = list_entry (e, struct thread, donation_elem);
-      struct list_elem *next = list_next (e);
-      if (donor->waiting_on == lock)
-        list_remove (e);
-      e = next;
-    }
+  if (!thread_mlfqs) //check Advanced Scheduling
+  {
+    /* Remove all donors waiting on this lock. */
+    struct thread *cur = thread_current ();
+    struct list_elem *e = list_begin (&cur->donations);
+    while (e != list_end (&cur->donations))
+      {
+        struct thread *donor = list_entry (e, struct thread, donation_elem);
+        struct list_elem *next = list_next (e);
+        if (donor->waiting_on == lock)
+          list_remove (e);
+        e = next;
+      }
 
-  /* Recalculate effective priority from remaining donors. */
-  if (list_empty (&cur->donations))
-    cur->priority = cur->base_priority;
-  else
-    {
-      list_sort (&cur->donations, donation_priority_more, NULL);
-      int top = list_entry (list_begin (&cur->donations),
+    /* Recalculate effective priority from remaining donors. */
+    if (list_empty (&cur->donations))
+      cur->priority = cur->base_priority;
+    else
+      {
+        list_sort (&cur->donations, donation_priority_more, NULL);
+        int top = list_entry (list_begin (&cur->donations),
                             struct thread, donation_elem)->priority;
-      cur->priority = top > cur->base_priority ? top : cur->base_priority;
-    }
+        cur->priority = top > cur->base_priority ? top : cur->base_priority;
+      }
+  }
 
   lock->holder = NULL;
   intr_set_level (old);

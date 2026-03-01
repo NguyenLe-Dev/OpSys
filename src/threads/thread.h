@@ -102,6 +102,10 @@ struct thread
 	 struct semaphore *sleep_sema;  	
     struct list_elem sleep_elem;
 
+    //Advanced Scheduler
+    int nice;
+    int recent_cpu;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
@@ -115,12 +119,19 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+extern int load_avg;
+
 bool priority_more (const struct list_elem *a,const struct list_elem *b,void *aux UNUSED);
 void test_priority( void );
 void thread_init (void);
 void thread_start (void);
 void thread_tick (void);
 void thread_print_stats (void);
+
+// Advanced Scheduling Helpers
+void mlfqs_calculate_priority (struct thread *t, void *aux);
+void mlfqs_calculate_recent_cpu (struct thread *t, void *aux);
+void mlfqs_calculate_load_avg (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);

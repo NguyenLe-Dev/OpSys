@@ -59,6 +59,7 @@ static unsigned thread_ticks;   /**< # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
+int load_avg;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -132,6 +133,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  load_avg = INT_TO_FLOAT(0);
 }
 
 /** Starts preemptive thread scheduling by enabling interrupts.
@@ -168,6 +171,9 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  //Advanced Scheduling
+  if (thread_mlfqs && t != idle_thread)
+    t->recent_cpu = ADD_FLOAT_INT (t->recent_cpu, 1);
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -179,6 +185,37 @@ thread_print_stats (void)
 {
   printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
           idle_ticks, kernel_ticks, user_ticks);
+}
+
+//Helpers for Advanced Scheduling 
+void
+mlfqs_calculate_priority (struct thread *t, void *aux UNUSED)
+{
+  if (t == idle_thread) return;
+  int p = PRI_MAX - FLOAT_TO_INT_0 (DIV_FLOAT_INT (t->recent_cpu, 4)) - (t->nice * 2);
+  t->priority = p < PRI_MIN ? PRI_MIN : (p > PRI_MAX ? PRI_MAX : p);
+}
+
+void
+mlfqs_calculate_recent_cpu (struct thread *t, void *aux UNUSED)
+{
+  if (t == idle_thread) return;
+  int twice_load = MULT_FLOAT_INT (load_avg, 2);
+  int coeff = DIV_FLOATS (twice_load, ADD_FLOAT_INT (twice_load, 1));
+  t->recent_cpu = ADD_FLOAT_INT (MULT_FLOATS (coeff, t->recent_cpu), t->nice);
+}
+
+void
+mlfqs_calculate_load_avg (void)
+{
+  int ready_threads = list_size ((&ready_list));
+  if (thread_current () != idle_thread)
+    ready_threads++;
+
+  load_avg = ADD_FLOATS (
+               MULT_FLOATS (DIV_FLOATS (INT_TO_FLOAT (59), INT_TO_FLOAT (60)), load_avg),
+               MULT_FLOAT_INT (DIV_FLOATS (INT_TO_FLOAT (1), INT_TO_FLOAT (60)), ready_threads)
+             );
 }
 
 /** Creates a new kernel thread named NAME with the given initial
@@ -216,6 +253,13 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  if (thread_mlfqs) //Advanced Scheduler
+  {
+    t->nice = thread_current()->nice;
+    t->recent_cpu = thread_current()->recent_cpu;
+     mlfqs_calculate_priority (t, NULL);
+  }
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -373,6 +417,8 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if (thread_mlfqs) //Advanced Scheduler
+    return;
   enum intr_level old = intr_disable ();
   struct thread *cur = thread_current ();
   cur->base_priority = new_priority;
@@ -394,31 +440,30 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  thread_current ()->nice = nice;
+  mlfqs_calculate_priority (thread_current(), NULL);
+  test_priority ();
 }
 
 /** Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current ()->nice;
 }
 
 /** Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FLOAT_TO_INT_NEAREST (MULT_FLOAT_INT (load_avg, 100));
 }
 
 /** Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FLOAT_TO_INT_NEAREST (MULT_FLOAT_INT (thread_current ()->recent_cpu, 100));
 }
 
 /** Idle thread.  Executes when no other thread is ready to run.
@@ -510,6 +555,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->base_priority = priority;
   t->waiting_on = NULL;
   list_init (&t->donations);
+  t->nice = 0;
+  t->recent_cpu = INT_TO_FLOAT(0);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
