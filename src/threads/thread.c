@@ -71,29 +71,6 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-void test_priority( void )
-{
-  if ( list_empty( &ready_list ) )
-  {
-    return;
-  }
-
-  struct thread *cur = thread_current();
-  struct thread *highest_ready = list_entry( list_begin(&ready_list), struct thread, elem );
-  
-  if ( cur->priority < highest_ready->priority )
-  {
-    if ( intr_context() )
-    {
-      intr_yield_on_return();
-    }
-    else
-    {
-      thread_yield();
-    }
-  }
-}
-
 /** Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -107,14 +84,6 @@ void test_priority( void )
 
    It is not safe to call thread_current() until this function
    finishes. */
-static bool priority_more (const struct list_elem *a,
-                           const struct list_elem *b,
-                           void *aux UNUSED)
-{
-  struct thread *t1 = list_entry(a, struct thread, elem);
-  struct thread *t2 = list_entry(b, struct thread, elem);
-  return t1->priority > t2->priority;
-}
 
 void
 thread_init (void) 
@@ -260,6 +229,15 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
+static bool
+priority_higher (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+  const struct thread *ta = list_entry(a, struct thread, elem);
+  const struct thread *tb = list_entry(b, struct thread, elem);
+  return ta->priority > tb->priority;
+}
+
+
 void
 thread_unblock (struct thread *t) 
 {
@@ -269,17 +247,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered (&ready_list, &t->elem, priority_more, NULL);
+  list_insert_ordered (&ready_list, &t->elem, priority_higher, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
-  if (t->priority > thread_current()->priority){
-    if (intr_context()){
-      intr_yield_on_return();
-    }else{
-      thread_yield();
-    }
-  }
-
 }
 
 /** Returns the name of the running thread. */
@@ -348,7 +318,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, priority_higher, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -376,7 +346,6 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  test_priority(); 
 }
 
 /** Returns the current thread's priority. */

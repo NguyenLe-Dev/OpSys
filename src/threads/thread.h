@@ -93,6 +93,11 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
 
+    int64_t thread_wakeup_tick; 
+    struct semaphore *sleep_sema;  
+    struct list_elem sleep_elem;
+
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
@@ -106,10 +111,10 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-void test_priority( void );
+
 void thread_init (void);
 void thread_start (void);
-static bool priority_more (const struct list_elem *a,const struct list_elem *b,void *aux UNUSED);
+
 void thread_tick (void);
 void thread_print_stats (void);
 
