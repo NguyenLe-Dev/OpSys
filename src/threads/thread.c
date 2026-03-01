@@ -191,7 +191,10 @@ thread_print_stats (void)
 void
 mlfqs_calculate_priority (struct thread *t, void *aux UNUSED)
 {
-  if (t == idle_thread) return;
+  if (t == idle_thread) 
+    return;
+
+  /* Priority = PRI_MAX[which is 63] - (recent cpu / 4) - (nice * 2) */
   int p = PRI_MAX - FLOAT_TO_INT_0 (DIV_FLOAT_INT (t->recent_cpu, 4)) - (t->nice * 2);
   t->priority = p < PRI_MIN ? PRI_MIN : (p > PRI_MAX ? PRI_MAX : p);
 }
@@ -199,7 +202,10 @@ mlfqs_calculate_priority (struct thread *t, void *aux UNUSED)
 void
 mlfqs_calculate_recent_cpu (struct thread *t, void *aux UNUSED)
 {
-  if (t == idle_thread) return;
+  if (t == idle_thread) 
+    return;
+
+  /* recent cpu = ((2 * load avg) / (2 * load avg + 1) ) * recent cpu + nice */
   int twice_load = MULT_FLOAT_INT (load_avg, 2);
   int coeff = DIV_FLOATS (twice_load, ADD_FLOAT_INT (twice_load, 1));
   t->recent_cpu = ADD_FLOAT_INT (MULT_FLOATS (coeff, t->recent_cpu), t->nice);
@@ -212,6 +218,7 @@ mlfqs_calculate_load_avg (void)
   if (thread_current () != idle_thread)
     ready_threads++;
 
+  /* load avg = 59/60*(load avg) = 1/60(ready threads) */
   load_avg = ADD_FLOATS (
                MULT_FLOATS (DIV_FLOATS (INT_TO_FLOAT (59), INT_TO_FLOAT (60)), load_avg),
                MULT_FLOAT_INT (DIV_FLOATS (INT_TO_FLOAT (1), INT_TO_FLOAT (60)), ready_threads)
@@ -441,7 +448,8 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   thread_current ()->nice = nice;
-  mlfqs_calculate_priority (thread_current(), NULL);
+  //nice impacts priority
+  mlfqs_calculate_priority (thread_current(), NULL); 
   test_priority ();
 }
 

@@ -223,13 +223,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   // Advanced Scheduling
   if (thread_mlfqs){ 
-    if (ticks % TIMER_FREQ == 0)
+    if (ticks % TIMER_FREQ == 0) //every second
     {
-      mlfqs_calculate_load_avg ();
-      thread_foreach(mlfqs_calculate_recent_cpu, NULL);
-      thread_foreach(mlfqs_calculate_priority, NULL);
+      mlfqs_calculate_load_avg (); 
+      thread_foreach(mlfqs_calculate_recent_cpu, NULL); //per thread
+      thread_foreach(mlfqs_calculate_priority, NULL); //per thread
     }
-    else if (ticks % 4 == 0)
+    else if (ticks % 4 == 0) //priority every 4 ticks
       thread_foreach(mlfqs_calculate_priority, NULL);
   }
 }
